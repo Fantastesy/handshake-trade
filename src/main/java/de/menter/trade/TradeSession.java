@@ -113,6 +113,8 @@ public final class TradeSession {
         List<ItemStack> fromB = takeAll(offerB);
         TradeRecovery.clear(a);
         TradeRecovery.clear(b);
+        // before give(): placing items into the inventory shrinks the stacks
+        TradeLog.record(TradeManager.server, a, b, fromA, fromB);
         give(b, fromA);
         give(a, fromB);
         for (ServerPlayer p : List.of(a, b)) {

@@ -67,6 +67,28 @@ public final class Lang {
         add("menu.confirmed.lore", "Click to take it back.", "Klicken zum Zurücknehmen.");
         add("menu.partner_confirmed", "✔ %s confirmed", "✔ %s hat bestätigt");
         add("menu.partner_waiting", "%s has not confirmed yet", "%s hat noch nicht bestätigt");
+
+        add("log.title", "Trade log", "Trade-Log");
+        add("log.title.player", "Trade log: %s", "Trade-Log: %s");
+        add("log.entry", "#%s  %s ⇄ %s", "#%s  %s ⇄ %s");
+        add("log.date_format", "yyyy-MM-dd HH:mm", "dd.MM.yyyy HH:mm");
+        add("log.gave", "%s gave:", "%s hat gegeben:");
+        add("log.nothing", "  nothing", "  nichts");
+        add("log.more", "  … and %s more", "  … und %s weitere");
+        add("log.open", "Click to view", "Klicken zum Ansehen");
+        add("log.prev", "← Previous page", "← Vorherige Seite");
+        add("log.next", "Next page →", "Nächste Seite →");
+        add("log.page", "Page %s of %s", "Seite %s von %s");
+        add("log.count", "%s trades", "%s Trades");
+        add("log.filter", "Player: %s", "Spieler: %s");
+        add("log.empty", "No trades logged yet.", "Noch keine Trades geloggt.");
+        add("log.empty.player", "No logged trades with %s.", "Keine geloggten Trades mit %s.");
+        add("log.back", "← Back to the list", "← Zurück zur Liste");
+        add("log.label.a", "← %s gave", "← %s hat gegeben");
+        add("log.label.b", "%s gave →", "%s hat gegeben →");
+        add("log.label.got", "%s got this.", "Das hat %s bekommen.");
+        add("log.disabled", "Trade logging is turned off (log_trades in config/handshake-trade.json).",
+                "Das Trade-Log ist ausgeschaltet (log_trades in config/handshake-trade.json).");
     }
 
     private Lang() {}

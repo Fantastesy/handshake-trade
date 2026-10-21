@@ -12,6 +12,7 @@ Safe player-to-player trading for Minecraft (Fabric). **Server-side only** – p
 - **Nothing gets lost:** cancelling, closing the window, disconnecting, dying or a server stop hands every item back.
 - **Crash-safe:** items inside a running trade are stored in the player's own save data (Fabric data attachment), together with the inventory. After a crash they are given back on the next join.
 - **English and German**, picked from each player's game language – no resource pack needed.
+- **Trade log:** every completed trade is saved in the world folder. Operators open `/trade log` and browse all trades in the same chest window – click one to see exactly what each player gave.
 - No permissions needed, every player can trade.
 
 ## Commands
@@ -22,6 +23,7 @@ Safe player-to-player trading for Minecraft (Fabric). **Server-side only** – p
 | `/trade accept <player>` | Accept a request |
 | `/trade deny <player>` | Deny a request |
 | `/trade cancel` | Cancel your running trade or withdraw your requests |
+| `/trade log [player]` | Operators only: browse the trade log, optionally only trades of one player |
 
 ## Config
 
@@ -32,11 +34,15 @@ Safe player-to-player trading for Minecraft (Fabric). **Server-side only** – p
   "request_timeout_seconds": 60,
   "confirm_cooldown_seconds": 1.5,
   "max_distance": 0.0,
-  "allow_cross_dimension": true
+  "allow_cross_dimension": true,
+  "log_trades": true,
+  "time_zone": ""
 }
 ```
 
-`max_distance` is in blocks, `0` means no limit.
+`max_distance` is in blocks, `0` means no limit. `time_zone` is used for the times in the log (e.g. `"Europe/Berlin"`), empty means the server's time zone.
+
+The log is written to `<world>/handshake-trade/trades.jsonl` (full item data, used by `/trade log`) and `trades.log` (one readable line per trade).
 
 ## Requirements
 

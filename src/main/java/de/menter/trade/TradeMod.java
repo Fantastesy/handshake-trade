@@ -1,5 +1,6 @@
 package de.menter.trade;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.fabricmc.api.ModInitializer;
@@ -10,8 +11,10 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.SimpleMenuProvider;
 
 public class TradeMod implements ModInitializer {
 
@@ -36,10 +39,19 @@ public class TradeMod implements ModInitializer {
                                     TradeManager.cancelCommand(ctx.getSource().getPlayerOrException());
                                     return 1;
                                 }))
+                        .then(Commands.literal("log")
+                                .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
+                                .executes(ctx -> openLog(ctx, null))
+                                .then(Commands.argument("name", StringArgumentType.word())
+                                        .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(TradeLog.names(), builder))
+                                        .executes(ctx -> openLog(ctx, StringArgumentType.getString(ctx, "name")))))
                         .then(Commands.argument("player", EntityArgument.player())
                                 .executes(ctx -> run(ctx, Action.REQUEST)))));
 
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> TradeManager.server = server);
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            TradeManager.server = server;
+            TradeLog.load(server);
+        });
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> TradeManager.cancelAll());
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 TradeRecovery.restoreOnJoin(handler.getPlayer()));
@@ -69,6 +81,17 @@ public class TradeMod implements ModInitializer {
             case ACCEPT -> TradeManager.accept(self, other);
             case DENY -> TradeManager.deny(self, other);
         }
+        return 1;
+    }
+
+    private static int openLog(CommandContext<CommandSourceStack> ctx, String filter) throws CommandSyntaxException {
+        ServerPlayer self = ctx.getSource().getPlayerOrException();
+        if (!TradeConfig.get().logTrades) {
+            TradeManager.fail(self, Lang.get(self, "log.disabled"));
+            return 0;
+        }
+        self.openMenu(new SimpleMenuProvider((id, inventory, player) -> new TradeLogMenu(id, inventory, self, filter),
+                TradeLogMenu.title(self, filter)));
         return 1;
     }
 }

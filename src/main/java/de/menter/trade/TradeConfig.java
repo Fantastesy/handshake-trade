@@ -33,6 +33,14 @@ public final class TradeConfig {
     @SerializedName("allow_cross_dimension")
     public boolean allowCrossDimension = true;
 
+    /** completed trades go to the world folder and can be browsed by operators with /trade log */
+    @SerializedName("log_trades")
+    public boolean logTrades = true;
+
+    /** for the times shown in the log, e.g. "Europe/Berlin"; empty = the server's time zone */
+    @SerializedName("time_zone")
+    public String timeZone = "";
+
     private static TradeConfig instance = new TradeConfig();
 
     public static TradeConfig get() {
