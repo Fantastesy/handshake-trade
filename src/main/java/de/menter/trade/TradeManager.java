@@ -1,6 +1,7 @@
 package de.menter.trade;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
@@ -8,10 +9,9 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -25,8 +25,6 @@ import java.util.UUID;
 
 public final class TradeManager {
 
-    static final long REQUEST_TIMEOUT_MS = 60_000;
-
     static MinecraftServer server;
 
     /** target -> (sender -> expiry time) */
@@ -38,56 +36,61 @@ public final class TradeManager {
 
     static void request(ServerPlayer sender, ServerPlayer target) {
         if (sender == target) {
-            fail(sender, "Du kannst nicht mit dir selbst traden.");
+            fail(sender, Lang.get(sender, "error.self"));
             return;
         }
         if (sessions.containsKey(sender.getUUID())) {
-            fail(sender, "Du bist schon in einem Trade.");
+            fail(sender, Lang.get(sender, "error.busy.self"));
             return;
         }
         if (sessions.containsKey(target.getUUID())) {
-            fail(sender, name(target) + " ist gerade in einem anderen Trade.");
+            fail(sender, Lang.get(sender, "error.busy.other", name(target)));
             return;
         }
+        if (!inReach(sender, target)) return;
         // Both asked each other: just start
         if (pending(sender, target)) {
             accept(sender, target);
             return;
         }
 
+        int timeout = TradeConfig.get().requestTimeoutSeconds;
         requests.computeIfAbsent(target.getUUID(), k -> new HashMap<>())
-                .put(sender.getUUID(), System.currentTimeMillis() + REQUEST_TIMEOUT_MS);
+                .put(sender.getUUID(), System.currentTimeMillis() + timeout * 1000L);
 
         target.connection.send(new ClientboundSetTitlesAnimationPacket(10, 70, 20));
         target.connection.send(new ClientboundSetSubtitleTextPacket(
-                Component.literal(name(sender) + " will mit dir traden").withStyle(ChatFormatting.YELLOW)));
+                Component.literal(Lang.get(target, "request.subtitle", name(sender))).withStyle(ChatFormatting.YELLOW)));
         target.connection.send(new ClientboundSetTitleTextPacket(
-                Component.literal("Trade-Anfrage").withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)));
+                Component.literal(Lang.get(target, "request.title")).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD)));
         sound(target, SoundEvents.NOTE_BLOCK_PLING.value(), 1f, 1.2f);
 
-        MutableComponent msg = Component.literal(name(sender) + " will mit dir traden. ").withStyle(ChatFormatting.YELLOW)
-                .append(button("[Annehmen]", ChatFormatting.GREEN, "/trade accept " + name(sender), "Trade annehmen"))
+        MutableComponent msg = Component.literal(Lang.get(target, "request.chat", name(sender))).withStyle(ChatFormatting.YELLOW)
+                .append(button(Lang.get(target, "request.accept"), ChatFormatting.GREEN,
+                        "/trade accept " + name(sender), Lang.get(target, "request.accept.hover")))
                 .append(Component.literal(" "))
-                .append(button("[Ablehnen]", ChatFormatting.RED, "/trade deny " + name(sender), "Trade ablehnen"));
+                .append(button(Lang.get(target, "request.deny"), ChatFormatting.RED,
+                        "/trade deny " + name(sender), Lang.get(target, "request.deny.hover")));
         target.sendSystemMessage(msg);
 
-        info(sender, "Trade-Anfrage an " + name(target) + " geschickt. Sie gilt 60 Sekunden.");
+        info(sender, Lang.get(sender, "request.sent", name(target), timeout));
     }
 
     static void accept(ServerPlayer self, ServerPlayer sender) {
         if (!pending(self, sender)) {
-            fail(self, "Du hast keine offene Trade-Anfrage von " + name(sender) + ".");
+            fail(self, Lang.get(self, "error.no_request", name(sender)));
             return;
         }
         requests.get(self.getUUID()).remove(sender.getUUID());
         if (sessions.containsKey(self.getUUID()) || sessions.containsKey(sender.getUUID())) {
-            fail(self, "Einer von euch ist schon in einem Trade.");
+            fail(self, Lang.get(self, "error.busy.any"));
             return;
         }
         if (!self.isAlive() || !sender.isAlive()) {
-            fail(self, "Der Trade geht gerade nicht.");
+            fail(self, Lang.get(self, "error.unavailable"));
             return;
         }
+        if (!inReach(self, sender)) return;
         TradeSession session = new TradeSession(sender, self);
         sessions.put(sender.getUUID(), session);
         sessions.put(self.getUUID(), session);
@@ -96,18 +99,18 @@ public final class TradeManager {
 
     static void deny(ServerPlayer self, ServerPlayer sender) {
         if (!pending(self, sender)) {
-            fail(self, "Du hast keine offene Trade-Anfrage von " + name(sender) + ".");
+            fail(self, Lang.get(self, "error.no_request", name(sender)));
             return;
         }
         requests.get(self.getUUID()).remove(sender.getUUID());
-        info(self, "Trade-Anfrage von " + name(sender) + " abgelehnt.");
-        fail(sender, name(self) + " hat deine Trade-Anfrage abgelehnt.");
+        info(self, Lang.get(self, "request.denied.self", name(sender)));
+        fail(sender, Lang.get(sender, "request.denied.other", name(self)));
     }
 
     static void cancelCommand(ServerPlayer self) {
         TradeSession session = sessions.get(self.getUUID());
         if (session != null) {
-            session.cancel(name(self) + " hat den Trade abgebrochen.");
+            session.cancel("reason.cancelled", name(self));
             return;
         }
         boolean any = false;
@@ -115,16 +118,16 @@ public final class TradeManager {
             any |= byTarget.remove(self.getUUID()) != null;
         }
         if (any) {
-            info(self, "Deine Trade-Anfragen wurden zurückgezogen.");
+            info(self, Lang.get(self, "request.withdrawn"));
         } else {
-            fail(self, "Du hast keinen laufenden Trade und keine offene Anfrage.");
+            fail(self, Lang.get(self, "error.nothing"));
         }
     }
 
-    static void onLeave(ServerPlayer player, String why) {
+    static void onLeave(ServerPlayer player, String reasonKey) {
         TradeSession session = sessions.get(player.getUUID());
         if (session != null) {
-            session.cancel(name(player) + " " + why + ".");
+            session.cancel(reasonKey, name(player));
         }
         requests.remove(player.getUUID());
         for (Map<UUID, Long> byTarget : requests.values()) {
@@ -134,7 +137,7 @@ public final class TradeManager {
 
     static void cancelAll() {
         for (TradeSession session : new ArrayList<>(sessions.values())) {
-            session.cancel("Der Server wird gestoppt.");
+            session.cancel("reason.stopping", "");
         }
         requests.clear();
     }
@@ -152,7 +155,7 @@ public final class TradeManager {
                 ServerPlayer sender = server.getPlayerList().getPlayer(senderId);
                 ServerPlayer target = server.getPlayerList().getPlayer(entry.getKey());
                 if (sender != null && target != null) {
-                    fail(sender, "Deine Trade-Anfrage an " + name(target) + " ist abgelaufen.");
+                    fail(sender, Lang.get(sender, "request.expired", name(target)));
                 }
             }
             if (entry.getValue().isEmpty()) it.remove();
@@ -161,6 +164,21 @@ public final class TradeManager {
 
     static void ended(TradeSession session) {
         sessions.values().removeIf(s -> s == session);
+    }
+
+    /** distance / dimension limits from the config; tells the asking player why it failed */
+    private static boolean inReach(ServerPlayer self, ServerPlayer other) {
+        TradeConfig config = TradeConfig.get();
+        boolean sameDimension = self.level().dimension() == other.level().dimension();
+        if (!sameDimension && (!config.allowCrossDimension || config.maxDistance > 0)) {
+            fail(self, Lang.get(self, "error.dimension", name(other)));
+            return false;
+        }
+        if (config.maxDistance > 0 && self.distanceTo(other) > config.maxDistance) {
+            fail(self, Lang.get(self, "error.too_far", name(other), (int) config.maxDistance));
+            return false;
+        }
+        return true;
     }
 
     private static boolean pending(ServerPlayer target, ServerPlayer sender) {

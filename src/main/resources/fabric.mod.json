@@ -1,11 +1,12 @@
 {
   "schemaVersion": 1,
-  "id": "menter-trade",
+  "id": "handshake-trade",
   "version": "${version}",
-  "name": "Menter Trade",
-  "description": "Spieler-zu-Spieler-Tausch per /trade <Spieler>. Läuft nur auf dem Server.",
+  "name": "Handshake Trade",
+  "description": "Safe player-to-player trading with /trade <player>. Server-side only: players join with a vanilla client.",
   "authors": ["Levin"],
   "license": "MIT",
+  "icon": "assets/handshake-trade/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": ["de.menter.trade.TradeMod"]

@@ -19,8 +19,6 @@ import java.util.List;
 public final class TradeSession {
 
     static final int OFFER_SIZE = 20;
-    /** confirming right after the other side changed something is blocked, so nobody gets tricked by a last-second swap */
-    static final long CONFIRM_COOLDOWN_MS = 1500;
 
     final ServerPlayer a;
     final ServerPlayer b;
@@ -40,11 +38,11 @@ public final class TradeSession {
 
     void open() {
         a.openMenu(new SimpleMenuProvider((id, inventory, player) -> menuA = new TradeMenu(id, inventory, this, a),
-                Component.literal("Du  ⇄  " + TradeManager.name(b))));
+                Component.literal(Lang.get(a, "menu.title", TradeManager.name(b)))));
         b.openMenu(new SimpleMenuProvider((id, inventory, player) -> menuB = new TradeMenu(id, inventory, this, b),
-                Component.literal("Du  ⇄  " + TradeManager.name(a))));
+                Component.literal(Lang.get(b, "menu.title", TradeManager.name(a)))));
         if (menuA == null || menuB == null || a.containerMenu != menuA || b.containerMenu != menuB) {
-            cancel("Das Trade-Fenster konnte nicht geöffnet werden.");
+            cancel("reason.open_failed", "");
             return;
         }
         lastChange = System.currentTimeMillis();
@@ -65,14 +63,15 @@ public final class TradeSession {
         return player == a ? confirmedA : confirmedB;
     }
 
-    private void onOfferChanged() {
+    private void onOfferChanged(SimpleContainer offer) {
         if (ended) return;
+        TradeRecovery.mirror(offer == offerA ? a : b, offer);
         lastChange = System.currentTimeMillis();
         if (confirmedA || confirmedB) {
             confirmedA = false;
             confirmedB = false;
-            actionbar(a, "Angebot geändert – bitte neu bestätigen");
-            actionbar(b, "Angebot geändert – bitte neu bestätigen");
+            actionbar(a, "trade.changed");
+            actionbar(b, "trade.changed");
         }
         refresh();
     }
@@ -82,11 +81,12 @@ public final class TradeSession {
         boolean now = !isConfirmed(player);
         if (now) {
             if (offerA.isEmpty() && offerB.isEmpty()) {
-                actionbar(player, "Legt erst etwas in den Trade");
+                actionbar(player, "trade.empty");
                 return;
             }
-            if (System.currentTimeMillis() - lastChange < CONFIRM_COOLDOWN_MS) {
-                actionbar(player, "Das Angebot hat sich gerade geändert – schau nochmal drüber");
+            // against last-second swaps: confirming right after a change is blocked for a moment
+            if (System.currentTimeMillis() - lastChange < TradeConfig.get().confirmCooldownSeconds * 1000) {
+                actionbar(player, "trade.cooldown");
                 return;
             }
         }
@@ -103,7 +103,7 @@ public final class TradeSession {
 
     private void complete() {
         if (a.hasDisconnected() || b.hasDisconnected() || !a.isAlive() || !b.isAlive()) {
-            cancel("Der Trade konnte nicht abgeschlossen werden.");
+            cancel("reason.complete_failed", "");
             return;
         }
         ended = true;
@@ -111,25 +111,32 @@ public final class TradeSession {
         closeMenus();
         List<ItemStack> fromA = takeAll(offerA);
         List<ItemStack> fromB = takeAll(offerB);
+        TradeRecovery.clear(a);
+        TradeRecovery.clear(b);
         give(b, fromA);
         give(a, fromB);
         for (ServerPlayer p : List.of(a, b)) {
-            p.sendSystemMessage(Component.literal("Trade mit " + TradeManager.name(partnerOf(p)) + " abgeschlossen!")
+            p.sendSystemMessage(Component.literal(Lang.get(p, "trade.completed", TradeManager.name(partnerOf(p))))
                     .withStyle(ChatFormatting.GREEN));
             TradeManager.sound(p, SoundEvents.PLAYER_LEVELUP, 0.7f, 1.3f);
         }
     }
 
-    void cancel(String reason) {
+    /** ends the trade and hands every item back; the reason is a Lang key taking the causing player's name */
+    void cancel(String reasonKey, String who) {
         if (ended) return;
         ended = true;
         TradeManager.ended(this);
         closeMenus();
-        give(a, takeAll(offerA));
-        give(b, takeAll(offerB));
+        List<ItemStack> backToA = takeAll(offerA);
+        List<ItemStack> backToB = takeAll(offerB);
+        TradeRecovery.clear(a);
+        TradeRecovery.clear(b);
+        give(a, backToA);
+        give(b, backToB);
         for (ServerPlayer p : List.of(a, b)) {
             if (!p.hasDisconnected()) {
-                TradeManager.fail(p, "Trade abgebrochen: " + reason + " Du hast deine Sachen zurück.");
+                TradeManager.fail(p, Lang.get(p, "trade.cancelled", Lang.get(p, reasonKey, who)));
             }
         }
     }
@@ -170,11 +177,11 @@ public final class TradeSession {
         @Override
         public void setChanged() {
             super.setChanged();
-            onOfferChanged();
+            onOfferChanged(this);
         }
     }
 
-    private static void actionbar(ServerPlayer player, String text) {
-        player.sendOverlayMessage(Component.literal(text).withStyle(ChatFormatting.YELLOW));
+    private static void actionbar(ServerPlayer player, String key) {
+        player.sendOverlayMessage(Component.literal(Lang.get(player, key)).withStyle(ChatFormatting.YELLOW));
     }
 }

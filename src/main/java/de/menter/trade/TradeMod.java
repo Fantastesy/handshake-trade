@@ -15,32 +15,40 @@ import net.minecraft.server.level.ServerPlayer;
 
 public class TradeMod implements ModInitializer {
 
+    public static final String MOD_ID = "handshake-trade";
+
     @Override
     public void onInitialize() {
+        TradeConfig.load();
+        // touch the class so the attachment type is registered before any player data is loaded
+        TradeRecovery.PENDING.identifier();
+
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("trade")
                         .then(Commands.literal("accept")
-                                .then(Commands.argument("spieler", EntityArgument.player())
+                                .then(Commands.argument("player", EntityArgument.player())
                                         .executes(ctx -> run(ctx, Action.ACCEPT))))
                         .then(Commands.literal("deny")
-                                .then(Commands.argument("spieler", EntityArgument.player())
+                                .then(Commands.argument("player", EntityArgument.player())
                                         .executes(ctx -> run(ctx, Action.DENY))))
                         .then(Commands.literal("cancel")
                                 .executes(ctx -> {
                                     TradeManager.cancelCommand(ctx.getSource().getPlayerOrException());
                                     return 1;
                                 }))
-                        .then(Commands.argument("spieler", EntityArgument.player())
+                        .then(Commands.argument("player", EntityArgument.player())
                                 .executes(ctx -> run(ctx, Action.REQUEST)))));
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> TradeManager.server = server);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> TradeManager.cancelAll());
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+                TradeRecovery.restoreOnJoin(handler.getPlayer()));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
-                TradeManager.onLeave(handler.getPlayer(), "hat den Server verlassen"));
+                TradeManager.onLeave(handler.getPlayer(), "reason.left"));
         // Before the death drops: the returned offer lands in the inventory and drops/keeps like everything else
         ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
             if (entity instanceof ServerPlayer player) {
-                TradeManager.onLeave(player, "ist gestorben");
+                TradeManager.onLeave(player, "reason.died");
             }
             return true;
         });
@@ -55,7 +63,7 @@ public class TradeMod implements ModInitializer {
 
     private static int run(CommandContext<CommandSourceStack> ctx, Action action) throws CommandSyntaxException {
         ServerPlayer self = ctx.getSource().getPlayerOrException();
-        ServerPlayer other = EntityArgument.getPlayer(ctx, "spieler");
+        ServerPlayer other = EntityArgument.getPlayer(ctx, "player");
         switch (action) {
             case REQUEST -> TradeManager.request(self, other);
             case ACCEPT -> TradeManager.accept(self, other);

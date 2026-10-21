@@ -89,26 +89,25 @@ public class TradeMenu extends AbstractContainerMenu {
                 deco.setItem(i, named(Items.STAINED_GLASS_PANE.gray(), Component.literal(" ")));
             }
         }
-        deco.setItem(OWN_LABEL, named(Items.OAK_SIGN, text("← Deine Sachen", ChatFormatting.AQUA),
-                "Leg links rein, was du geben willst."));
-        deco.setItem(PARTNER_LABEL, named(Items.OAK_SIGN, text(partnerName + "s Sachen →", ChatFormatting.AQUA),
-                "Das bekommst du von " + partnerName + "."));
-        deco.setItem(CANCEL, named(Items.BARRIER, text("Abbrechen", ChatFormatting.RED),
-                "Jeder bekommt seine Sachen zurück."));
+        deco.setItem(OWN_LABEL, named(Items.OAK_SIGN, text(tr("menu.own"), ChatFormatting.AQUA),
+                tr("menu.own.lore")));
+        deco.setItem(PARTNER_LABEL, named(Items.OAK_SIGN, text(tr("menu.partner", partnerName), ChatFormatting.AQUA),
+                tr("menu.partner.lore", partnerName)));
+        deco.setItem(CANCEL, named(Items.BARRIER, text(tr("menu.cancel"), ChatFormatting.RED),
+                tr("menu.cancel.lore")));
         if (session.isConfirmed(owner)) {
-            deco.setItem(CONFIRM, named(Items.CONCRETE.lime(), text("✔ Du hast bestätigt", ChatFormatting.GREEN),
-                    "Klicken zum Zurücknehmen."));
+            deco.setItem(CONFIRM, named(Items.CONCRETE.lime(), text(tr("menu.confirmed"), ChatFormatting.GREEN),
+                    tr("menu.confirmed.lore")));
         } else {
-            deco.setItem(CONFIRM, named(Items.DYE.lime(), text("Bestätigen", ChatFormatting.GREEN),
-                    "Klicke, wenn du mit dem Tausch einverstanden bist.",
-                    "Getauscht wird erst, wenn beide bestätigt haben."));
+            deco.setItem(CONFIRM, named(Items.DYE.lime(), text(tr("menu.confirm"), ChatFormatting.GREEN),
+                    tr("menu.confirm.lore1"), tr("menu.confirm.lore2")));
         }
         if (session.isConfirmed(partner)) {
             deco.setItem(PARTNER_STATUS, named(Items.STAINED_GLASS_PANE.lime(),
-                    text("✔ " + partnerName + " hat bestätigt", ChatFormatting.GREEN)));
+                    text(tr("menu.partner_confirmed", partnerName), ChatFormatting.GREEN)));
         } else {
             deco.setItem(PARTNER_STATUS, named(Items.STAINED_GLASS_PANE.red(),
-                    text(partnerName + " hat noch nicht bestätigt", ChatFormatting.RED)));
+                    text(tr("menu.partner_waiting", partnerName), ChatFormatting.RED)));
         }
         broadcastChanges();
     }
@@ -121,7 +120,7 @@ public class TradeMenu extends AbstractContainerMenu {
                 if (slotId == CONFIRM) {
                     session.toggleConfirm(owner);
                 } else if (slotId == CANCEL) {
-                    TradeManager.server.execute(() -> session.cancel(TradeManager.name(owner) + " hat den Trade abgebrochen."));
+                    TradeManager.server.execute(() -> session.cancel("reason.cancelled", TradeManager.name(owner)));
                 }
             }
             // everything else in the read-only area is ignored; the client gets corrected by the next sync
@@ -200,8 +199,12 @@ public class TradeMenu extends AbstractContainerMenu {
         closing = true;
         super.removed(player);
         if (!session.ended) {
-            session.cancel(TradeManager.name(owner) + " hat das Trade-Fenster geschlossen.");
+            session.cancel("reason.closed", TradeManager.name(owner));
         }
+    }
+
+    private String tr(String key, Object... args) {
+        return Lang.get(owner, key, args);
     }
 
     private static Component text(String s, ChatFormatting color) {
